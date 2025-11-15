@@ -5,14 +5,23 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { useEffect } from 'react';
 
 export default function LoginScreen() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const { loginWithCredentials, loginWithGoogle } = useAuth();
+  const { loginWithCredentials, loginWithGoogle, user } = useAuth();
   const router = useRouter();
+
+  // Auto-navigate when user becomes authenticated
+  useEffect(() => {
+    if (user) {
+      console.log('User authenticated, navigating to tabs');
+      router.replace('/(tabs)');
+    }
+  }, [user, router]);
 
   const handleLogin = async () => {
     if (!username || !password) {
@@ -43,18 +52,20 @@ export default function LoginScreen() {
 
     try {
       const result = await loginWithGoogle();
+      console.log('Login result:', result);
+      
       if (result.ok) {
-        // Wait a moment for Firebase auth state to update
-        // The onAuthStateChanged listener will update the user state
-        // Then the index.tsx will handle navigation automatically
-        setTimeout(() => {
-          router.replace('/(tabs)');
-        }, 500);
+        // The useEffect hook will handle navigation when user state updates
+        // Just keep loading state until user is set
+        console.log('Login successful, waiting for auth state update...');
+        // Don't set loading to false - let the useEffect handle navigation
       } else {
+        console.error('Login failed:', result.error);
         setError(result.error || 'Google login failed');
         setLoading(false);
       }
     } catch (err: any) {
+      console.error('Login exception:', err);
       setError(err.message || 'An error occurred');
       setLoading(false);
     }

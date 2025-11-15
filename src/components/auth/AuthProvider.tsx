@@ -198,6 +198,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         showInRecents: true,
       });
       
+      console.log('OAuth result type:', result.type);
+      console.log('OAuth result params:', result.params);
+      console.log('OAuth result error:', result.error);
+      
       if (result.type === 'success') {
         const { id_token } = result.params;
         
@@ -223,6 +227,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             ok: false, 
             error: firebaseError.message || 'Failed to sign in to Firebase' 
           };
+        }
+      } else if (result.type === 'dismiss') {
+        // OAuth was dismissed (user closed the browser/error screen)
+        // Check if Firebase auth actually succeeded despite the dismiss
+        // This can happen if the OAuth completed but the redirect failed
+        console.log('OAuth dismissed, checking if Firebase auth succeeded...');
+        
+        try {
+          const currentUser = firebaseAuth.currentUser;
+          if (currentUser) {
+            console.log('Firebase auth succeeded despite OAuth dismiss, user:', currentUser.uid);
+            // The onAuthStateChanged listener will handle updating the user state
+            return { ok: true };
+          } else {
+            // Check if there's an ID token in the params even though type is dismiss
+            const { id_token } = result.params || {};
+            if (id_token) {
+              console.log('Found ID token in dismiss result, attempting Firebase sign-in...');
+              try {
+                const googleCredential = GoogleAuthProvider.credential(id_token);
+                await signInWithCredential(firebaseAuth, googleCredential);
+                console.log('Successfully signed in to Firebase with ID token from dismiss result');
+                return { ok: true };
+              } catch (firebaseError: any) {
+                console.error('Firebase sign-in error with dismiss token:', firebaseError);
+              }
+            }
+            return { ok: false, error: 'Sign-in was cancelled or failed' };
+          }
+        } catch (error) {
+          console.error('Error checking Firebase auth state:', error);
+          return { ok: false, error: 'Sign-in was cancelled' };
         }
       } else if (result.type === 'cancel') {
         return { ok: false, error: 'Sign-in was cancelled' };
