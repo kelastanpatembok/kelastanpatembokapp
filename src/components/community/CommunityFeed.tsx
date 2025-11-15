@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, RefreshControl } from 'react-native';
 import { firebaseDb, firebaseAuth } from '@/lib/firebase';
-import { collection, getDocs, query, where, orderBy, limit, doc, getDoc, setDoc, deleteDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import { Post } from '@/types';
 import { PostCard } from './PostCard';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -32,22 +31,20 @@ export function CommunityFeed({
 
   const loadPosts = async () => {
     try {
-      let postsQuery = query(
-        collection(firebaseDb, 'platforms', platformId, 'posts'),
-        where('communityId', '==', communityId)
-      );
+      let postsQuery = firebaseDb
+        .collection('platforms')
+        .doc(platformId)
+        .collection('posts')
+        .where('communityId', '==', communityId);
 
       if (onlyPinned) {
-        postsQuery = query(
-          collection(firebaseDb, 'platforms', platformId, 'posts'),
-          where('communityId', '==', communityId),
-          where('pinned', '==', true)
-        );
+        postsQuery = postsQuery.where('pinned', '==', true);
       }
 
-      const snap = await getDocs(
-        query(postsQuery, orderBy('createdAt', 'desc'), limit(50))
-      );
+      const snap = await postsQuery
+        .orderBy('createdAt', 'desc')
+        .limit(50)
+        .get();
 
       const postsData = snap.docs.map((doc) => ({
         id: doc.id,
@@ -57,8 +54,7 @@ export function CommunityFeed({
       setPosts(postsData);
 
       // Load likes and bookmarks
-      const currentUser = getAuth(firebaseAuth).currentUser;
-      const uid = currentUser?.uid;
+      const uid = firebaseAuth.currentUser?.uid;
       if (uid) {
         const liked = new Set<string>();
         const bookmarked = new Set<string>();
@@ -66,10 +62,15 @@ export function CommunityFeed({
         // Load likes
         await Promise.all(
           postsData.map(async (post) => {
-            const reactionDoc = await getDoc(
-              doc(firebaseDb, 'platforms', platformId, 'posts', post.id, 'reactions', uid)
-            );
-            if (reactionDoc.exists()) {
+            const reactionDoc = await firebaseDb
+              .collection('platforms')
+              .doc(platformId)
+              .collection('posts')
+              .doc(post.id)
+              .collection('reactions')
+              .doc(uid)
+              .get();
+            if (reactionDoc.exists) {
               liked.add(post.id);
             }
           })
@@ -79,10 +80,13 @@ export function CommunityFeed({
         await Promise.all(
           postsData.map(async (post) => {
             const bookmarkId = `${platformId}_${post.id}`;
-            const bookmarkDoc = await getDoc(
-              doc(firebaseDb, 'users', uid, 'bookmarks', bookmarkId)
-            );
-            if (bookmarkDoc.exists()) {
+            const bookmarkDoc = await firebaseDb
+              .collection('users')
+              .doc(uid)
+              .collection('bookmarks')
+              .doc(bookmarkId)
+              .get();
+            if (bookmarkDoc.exists) {
               bookmarked.add(post.id);
             }
           })
@@ -109,22 +113,29 @@ export function CommunityFeed({
   };
 
   const handleLike = async (postId: string) => {
-    const currentUser = getAuth(firebaseAuth).currentUser;
-    if (!currentUser) return;
+    if (!firebaseAuth.currentUser) return;
 
-    const uid = currentUser.uid;
+    const uid = firebaseAuth.currentUser.uid;
     const hadLike = likedPosts.has(postId);
-    const reactionRef = doc(firebaseDb, 'platforms', platformId, 'posts', postId, 'reactions', uid);
+    const reactionRef = firebaseDb
+      .collection('platforms')
+      .doc(platformId)
+      .collection('posts')
+      .doc(postId)
+      .collection('reactions')
+      .doc(uid);
 
     try {
       if (hadLike) {
-        await deleteDoc(reactionRef);
-        await updateDoc(
-          doc(firebaseDb, 'platforms', platformId, 'posts', postId),
-          {
-            likes: increment(-1),
-          }
-        );
+        await reactionRef.delete();
+        await firebaseDb
+          .collection('platforms')
+          .doc(platformId)
+          .collection('posts')
+          .doc(postId)
+          .update({
+            likes: firestore.FieldValue.increment(-1),
+          });
         setLikedPosts((prev) => {
           const next = new Set(prev);
           next.delete(postId);
@@ -136,16 +147,18 @@ export function CommunityFeed({
           )
         );
       } else {
-        await setDoc(reactionRef, {
+        await reactionRef.set({
           type: 'like',
-          createdAt: serverTimestamp(),
+          createdAt: firestore.FieldValue.serverTimestamp(),
         });
-        await updateDoc(
-          doc(firebaseDb, 'platforms', platformId, 'posts', postId),
-          {
-            likes: increment(1),
-          }
-        );
+        await firebaseDb
+          .collection('platforms')
+          .doc(platformId)
+          .collection('posts')
+          .doc(postId)
+          .update({
+            likes: firestore.FieldValue.increment(1),
+          });
         setLikedPosts((prev) => new Set([...prev, postId]));
         setPosts((prev) =>
           prev.map((p) =>
@@ -159,17 +172,20 @@ export function CommunityFeed({
   };
 
   const handleBookmark = async (postId: string) => {
-    const currentUser = getAuth(firebaseAuth).currentUser;
-    if (!currentUser) return;
+    if (!firebaseAuth.currentUser) return;
 
-    const uid = currentUser.uid;
+    const uid = firebaseAuth.currentUser.uid;
     const bookmarkId = `${platformId}_${postId}`;
-    const bookmarkRef = doc(firebaseDb, 'users', uid, 'bookmarks', bookmarkId);
+    const bookmarkRef = firebaseDb
+      .collection('users')
+      .doc(uid)
+      .collection('bookmarks')
+      .doc(bookmarkId);
 
     try {
       const isBookmarked = bookmarkedPosts.has(postId);
       if (isBookmarked) {
-        await deleteDoc(bookmarkRef);
+        await bookmarkRef.delete();
         setBookmarkedPosts((prev) => {
           const next = new Set(prev);
           next.delete(postId);
@@ -177,10 +193,10 @@ export function CommunityFeed({
         });
         setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, isBookmarked: false } : p)));
       } else {
-        await setDoc(bookmarkRef, {
+        await bookmarkRef.set({
           platformId,
           postId,
-          createdAt: serverTimestamp(),
+          createdAt: firestore.FieldValue.serverTimestamp(),
         });
         setBookmarkedPosts((prev) => new Set([...prev, postId]));
         setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, isBookmarked: true } : p)));

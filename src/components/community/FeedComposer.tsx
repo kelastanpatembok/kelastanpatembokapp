@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Alert, Platform, PermissionsAndroid } from 'react-native';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
 import { Image as ImageIcon, X } from 'lucide-react-native';
 import { useAuth } from '@/components/auth/AuthProvider';
-import * as ImagePicker from 'expo-image-picker';
+import { launchImageLibrary, ImagePickerResponse, MediaType } from 'react-native-image-picker';
 import { cn } from '@/lib/utils';
 
 interface FeedComposerProps {
@@ -20,22 +20,47 @@ export function FeedComposer({ onAddPost, placeholder = "What's on your mind?" }
   const [loading, setLoading] = useState(false);
 
   const handlePickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Please grant camera roll permissions');
-      return;
+    // Request permissions for Android
+    if (Platform.OS === 'android') {
+      try {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+          {
+            title: 'Storage Permission',
+            message: 'App needs access to your storage to pick images',
+            buttonNeutral: 'Ask Me Later',
+            buttonNegative: 'Cancel',
+            buttonPositive: 'OK',
+          }
+        );
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+          Alert.alert('Permission needed', 'Please grant storage permissions');
+          return;
+        }
+      } catch (err) {
+        console.warn(err);
+      }
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [16, 9],
-      quality: 0.8,
-    });
-
-    if (!result.canceled && result.assets[0]) {
-      setImageUri(result.assets[0].uri);
-    }
+    launchImageLibrary(
+      {
+        mediaType: 'photo' as MediaType,
+        quality: 0.8,
+        selectionLimit: 1,
+      },
+      (response: ImagePickerResponse) => {
+        if (response.didCancel) {
+          return;
+        }
+        if (response.errorMessage) {
+          Alert.alert('Error', response.errorMessage);
+          return;
+        }
+        if (response.assets && response.assets[0]) {
+          setImageUri(response.assets[0].uri || null);
+        }
+      }
+    );
   };
 
   const handleSubmit = async () => {
@@ -61,7 +86,7 @@ export function FeedComposer({ onAddPost, placeholder = "What's on your mind?" }
       <CardContent className="p-4">
         <View className="flex-row gap-3">
           <Avatar
-            src={user?.avatarUrl}
+            source={user?.avatarUrl ? { uri: user.avatarUrl } : undefined}
             fallback={user?.name?.substring(0, 2).toUpperCase() || 'U'}
             size="sm"
           />

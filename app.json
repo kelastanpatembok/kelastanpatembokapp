@@ -1,42 +1,5 @@
 {
-  "expo": {
-    "name": "Kelas Tanpa Tembok",
-    "slug": "kelastanpatembokapp",
-    "version": "1.0.0",
-    "orientation": "portrait",
-    "userInterfaceStyle": "automatic",
-    "splash": {
-      "resizeMode": "contain",
-      "backgroundColor": "#66b132"
-    },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.rwid.kelastanpatembok"
-    },
-    "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#66b132"
-      },
-      "package": "com.rwid.kelastanpatembok"
-    },
-    "web": {
-      "bundler": "metro"
-    },
-    "plugins": [
-      "expo-router"
-    ],
-    "scheme": "kelastanpatembok",
-    "extra": {
-      "eas": {
-        "projectId": ""
-      }
-    },
-    "experiments": {
-      "typedRoutes": true
-    }
-  }
+  "name": "kelastanpatembokapp",
+  "displayName": "Kelas Tanpa Tembok"
 }
 
